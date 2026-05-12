@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Cazador de Bolitas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: #b8b8b8;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── Layout: columna izq | campo | columna der ── */
+  #layout {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: row;   /* horizontal */
+  }
+
+  /* Columnas laterales de controles */
+  .side {
+    flex-shrink: 0;
+    background: #b0b0b0;
+    display: flex;
+    align-items: stretch;
+  }
+  .side-left  {
+    width: 70px;
+    flex-direction: column;  /* ▲ arriba, ▼ abajo */
+    border-right: 2px solid rgba(0,0,0,0.10);
+  }
+  .side-right {
+    width: 122px;
+    flex-direction: row;     /* ◀ izq, ▶ der */
+    border-left: 2px solid rgba(0,0,0,0.10);
+  }
+
+  /* Botones — llenan su mitad por completo */
+  .ctrl-btn {
+    flex: 1;
+    background: rgba(0,0,0,0.08);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: rgba(0,0,0,0.40);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.07s, color 0.07s;
+  }
+
+  /* Separador entre los dos botones de cada lado */
+  .side-left  #btn-up   { border-bottom: 1px solid rgba(0,0,0,0.12); }
+  .side-right #btn-left { border-right:  1px solid rgba(0,0,0,0.12); }
+
+  /* Esquinas redondeadas solo hacia el campo */
+  #btn-up    { border-radius: 0 0 0 0; }
+  #btn-down  { border-radius: 0 0 0 0; }
+  #btn-left  { border-radius: 0 0 0 0; }
+  #btn-right { border-radius: 0 0 0 0; }
+
+  .ctrl-btn.pressed {
+    background: rgba(0,0,0,0.22);
+    color: rgba(0,0,0,0.80);
+  }
+
+  /* Contador de bolitas en columna derecha */
+  #ball-count {
+    font-size: 10px;
+    color: rgba(0,0,0,0.28);
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+
+  /* Fila de botones horizontales (◀▶) */
+  #group-horiz {
+    display: flex;
+    flex-direction: row;
+  }
+
+  /* ── Campo de juego (centro) ── */
+  #field-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #c {
+    position: absolute;
+    top: 0; left: 0;
+    display: block;
+  }
+
+  /* HUD centrado arriba dentro del campo */
+  #hud {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 22px;
+    align-items: flex-end;
+    pointer-events: none;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  .hud-block  { display: flex; flex-direction: column; align-items: center; }
+  .hud-label  { color: rgba(0,0,0,0.32); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+  #score-val  { font-size: 24px; font-weight: bold; color: #111; line-height: 1; }
+  #best-val   { font-size: 15px; color: #444; line-height: 1; }
+
+  /* ── Overlay ── */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(200,200,200,0.93);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 13px;
+    z-index: 10;
+  }
+  #overlay.hidden { display: none; }
+
+  #overlay-title {
+    font-size: 26px;
+    font-weight: bold;
+    letter-spacing: 0.2em;
+    color: #111;
+    text-transform: uppercase;
+  }
+  #overlay-sub {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 0.07em;
+    text-align: center;
+    line-height: 2;
+  }
+  #overlay-score { font-size: 18px; color: #222; letter-spacing: 0.1em; display: none; }
+
+  #btn-start {
+    margin-top: 6px;
+    padding: 12px 44px;
+    background: #111;
+    color: #fff;
+    border: none;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #btn-start:active { background: #333; }
+
+  /* ── Girar teléfono ── */
+  #rotate-msg {
+    position: fixed;
+    inset: 0;
+    background: #b8b8b8;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: #666;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-align: center;
+    z-index: 30;
+  }
+  #rotate-msg span { font-size: 48px; }
+</style>
+</head>
+<body>
+
+<div id="layout">
+
+  <!-- Columna izquierda: ▲ y ▼ para el pulgar izquierdo -->
+  <div class="side side-left">
+    <div class="ctrl-btn" id="btn-up">▲</div>
+    <div class="ctrl-btn" id="btn-down">▼</div>
+  </div>
+
+  <!-- Campo de juego (centro, alto completo) -->
+  <div id="field-wrap">
+    <canvas id="c"></canvas>
+
+    <div id="hud">
+      <div class="hud-block">
+        <div class="hud-label">Puntos</div>
+        <div id="score-val">0</div>
+      </div>
+      <div class="hud-block">
+        <div class="hud-label">Récord</div>
+        <div id="best-val">0</div>
+      </div>
+      <div class="hud-block">
+        <div class="hud-label">Negras</div>
+        <div id="ball-count" style="font-size:16px;color:#444;line-height:1;">1</div>
+      </div>
+    </div>
+
+    <div id="overlay">
+      <div id="overlay-title">Cazador</div>
+      <div id="overlay-sub">
+        Captura las bolitas blancas · Evita las negras<br>
+        Izq ▲▼ · Der ◀▶
+      </div>
+      <div id="overlay-score"></div>
+      <button id="btn-start">JUGAR</button>
+    </div>
+  </div>
+
+  <!-- Columna derecha: ◀ y ▶ para el pulgar derecho -->
+  <div class="side side-right">
+    <div class="ctrl-btn" id="btn-left">◀</div>
+    <div class="ctrl-btn" id="btn-right">▶</div>
+  </div>
+
+</div>
+
+<div id="rotate-msg">
+  <span>&#8635;</span>
+  Gira el teléfono en horizontal
+</div>
+
+<script>
+const canvas       = document.getElementById('c');
+const ctx          = canvas.getContext('2d');
+const fieldWrap    = document.getElementById('field-wrap');
+const overlay      = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlaySub   = document.getElementById('overlay-sub');
+const overlayScore = document.getElementById('overlay-score');
+const btnStart     = document.getElementById('btn-start');
+const scoreVal     = document.getElementById('score-val');
+const bestVal      = document.getElementById('best-val');
+const ballCount    = document.getElementById('ball-count');
+const rotateMsg    = document.getElementById('rotate-msg');
+
+// ── Resize ─────────────────────────────────────────────────────────
+function resize() {
+  canvas.width  = fieldWrap.clientWidth;
+  canvas.height = fieldWrap.clientHeight;
+  const portrait = window.innerHeight > window.innerWidth * 1.1;
+  rotateMsg.style.display = portrait ? 'flex' : 'none';
+  if (playing) draw();
+}
+window.addEventListener('resize', resize);
+
+// ── Constantes ─────────────────────────────────────────────────────
+const R_PLAYER = 7;
+const R_WHITE  = 6;
+const R_BLACK  = 5;
+const SPEED    = 2.4;
+const P_SPEED  = 3.0;
+
+// ── Estado ─────────────────────────────────────────────────────────
+let playing = false;
+let score   = 0;
+let best    = +(localStorage.getItem('best') || 0);
+bestVal.textContent = best;
+
+let player = { x: 0, y: 0 };
+let white  = { x: 0, y: 0 };
+let blacks = [];
+let flash  = 0;
+let raf    = null;
+
+const keys = { up: false, down: false, left: false, right: false };
+
+// ── Utilidades ─────────────────────────────────────────────────────
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function dist(a, b) { const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+
+function safePos(m) {
+  return { x: rnd(m, canvas.width-m), y: rnd(m, canvas.height-m) };
+}
+function farFrom(ref, minD, m) {
+  let p, t=0;
+  do { p = safePos(m); t++; } while (dist(p,ref) < minD && t < 200);
+  return p;
+}
+function newBlack() {
+  const pos   = farFrom(player, 80, R_BLACK+6);
+  const horiz = Math.random() < 0.5;
+  const sign  = Math.random() < 0.5 ? 1 : -1;
+  return { x:pos.x, y:pos.y, vx: horiz?SPEED*sign:0, vy: horiz?0:SPEED*sign };
+}
+
+// ── Inicio ─────────────────────────────────────────────────────────
+function startGame() {
+  score = 0; flash = 0; blacks = [];
+  keys.up = keys.down = keys.left = keys.right = false;
+  scoreVal.textContent = '0';
+  ballCount.textContent = '1';
+
+  player = { x: canvas.width/2, y: canvas.height/2 };
+  white  = farFrom(player, 80, R_WHITE+6);
+  blacks.push(newBlack());
+
+  overlay.classList.add('hidden');
+  playing = true;
+  loop();
+}
+
+// ── Game over ──────────────────────────────────────────────────────
+function gameOver() {
+  playing = false;
+  cancelAnimationFrame(raf);
+  keys.up = keys.down = keys.left = keys.right = false;
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem('best', best);
+    bestVal.textContent = best;
+  }
+
+  overlayTitle.textContent   = '¡PERDISTE!';
+  overlaySub.textContent     = 'Tocaste una bolita negra';
+  overlayScore.style.display = 'block';
+  overlayScore.textContent   = 'Puntos: ' + score;
+  btnStart.textContent       = 'REINTENTAR';
+  overlay.classList.remove('hidden');
+}
+
+// ── Loop ───────────────────────────────────────────────────────────
+function loop() {
+  if (!playing) return;
+  update(); draw();
+  raf = requestAnimationFrame(loop);
+}
+
+function update() {
+  let dx = (keys.right?1:0) - (keys.left?1:0);
+  let dy = (keys.down?1:0)  - (keys.up?1:0);
+  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+
+  player.x = Math.max(R_PLAYER, Math.min(canvas.width -R_PLAYER, player.x + dx*P_SPEED));
+  player.y = Math.max(R_PLAYER, Math.min(canvas.height-R_PLAYER, player.y + dy*P_SPEED));
+
+  for (const b of blacks) {
+    b.x += b.vx; b.y += b.vy;
+    if (b.x-R_BLACK < 0)             { b.x = R_BLACK;              b.vx*=-1; }
+    if (b.x+R_BLACK > canvas.width)  { b.x = canvas.width-R_BLACK; b.vx*=-1; }
+    if (b.y-R_BLACK < 0)             { b.y = R_BLACK;              b.vy*=-1; }
+    if (b.y+R_BLACK > canvas.height) { b.y = canvas.height-R_BLACK;b.vy*=-1; }
+  }
+
+  if (dist(player, white) < R_PLAYER+R_WHITE-2) {
+    score++; scoreVal.textContent = score; flash = 10;
+    white = farFrom(player, 80, R_WHITE+6);
+    blacks.push(newBlack());
+    ballCount.textContent = blacks.length;
+  }
+
+  for (const b of blacks) {
+    if (dist(player, b) < R_PLAYER+R_BLACK-2) { gameOver(); return; }
+  }
+
+  if (flash > 0) flash--;
+}
+
+// ── Dibujo ─────────────────────────────────────────────────────────
+function draw() {
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = flash > 0 ? '#d8d89a' : '#d0d0d0';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.055)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 36) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 36) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W-2, H-2);
+
+  // Bolita blanca
+  const pulse = R_WHITE + 4 + Math.sin(Date.now()/260)*2.5;
+  ctx.beginPath(); ctx.arc(white.x, white.y, pulse, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(white.x, white.y, R_WHITE, 0, Math.PI*2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Bolitas negras
+  for (const b of blacks) {
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx*7, b.y - b.vy*7);
+    ctx.strokeStyle = 'rgba(180,30,30,0.22)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(b.x, b.y, R_BLACK, 0, Math.PI*2);
+    ctx.fillStyle = '#111'; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // Jugador
+  ctx.beginPath(); ctx.arc(player.x, player.y, R_PLAYER, 0, Math.PI*2);
+  ctx.fillStyle   = flash > 0 ? '#888820' : '#555';
+  ctx.fill();
+  ctx.strokeStyle = flash > 0 ? '#333' : '#222';
+  ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ── Botones táctiles multitoque ────────────────────────────────────
+const btnTouches = {};
+
+function bindBtn(id, dir) {
+  const el = document.getElementById(id);
+  function press(e) {
+    e.preventDefault();
+    if (!playing) return;
+    if (e.changedTouches) btnTouches[id] = e.changedTouches[0].identifier;
+    keys[dir] = true;
+    el.classList.add('pressed');
+  }
+  function release(e) {
+    e.preventDefault();
+    if (e.changedTouches) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === btnTouches[id]) {
+          delete btnTouches[id]; keys[dir] = false; el.classList.remove('pressed');
+        }
+      }
+    } else { keys[dir] = false; el.classList.remove('pressed'); }
+  }
+  el.addEventListener('touchstart',  press,   { passive: false });
+  el.addEventListener('touchend',    release, { passive: false });
+  el.addEventListener('touchcancel', release, { passive: false });
+  el.addEventListener('mousedown',   press);
+  el.addEventListener('mouseup',     release);
+  el.addEventListener('mouseleave',  release);
+}
+
+bindBtn('btn-up',    'up');
+bindBtn('btn-down',  'down');
+bindBtn('btn-left',  'left');
+bindBtn('btn-right', 'right');
+
+// ── Teclado PC ─────────────────────────────────────────────────────
+const keyMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right' };
+document.addEventListener('keydown', e => { if (keyMap[e.key]) { keys[keyMap[e.key]] = true;  e.preventDefault(); } });
+document.addEventListener('keyup',   e => { if (keyMap[e.key])   keys[keyMap[e.key]] = false; });
+
+// ── Botón inicio ───────────────────────────────────────────────────
+btnStart.addEventListener('click',    startGame);
+btnStart.addEventListener('touchend', e => { e.preventDefault(); startGame(); });
+
+// ── Init ───────────────────────────────────────────────────────────
+requestAnimationFrame(resize);
+</script>
+</body>
+</html>
